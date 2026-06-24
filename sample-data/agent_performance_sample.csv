@@ -1,0 +1,26 @@
+AgentName,TotalCalls,CP,CMDIS,CALLBK,BUSY,VM,VIO,DND,OTHER
+John Doe,150,45,20,15,30,25,10,3,2
+Jane Smith,200,80,35,25,30,20,8,1,1
+Bob Wilson,180,60,28,18,35,25,12,1,1
+Alice Johnson,165,52,24,19,32,22,14,2,0
+Mike Brown,140,38,18,14,28,26,13,2,1
+Sarah Davis,175,65,30,22,27,18,11,1,1
+Tom Anderson,190,72,32,24,33,20,7,1,1
+Emily White,155,48,22,16,29,24,13,2,1
+Chris Martin,145,42,19,15,31,23,12,2,1
+Lisa Garcia,170,58,26,20,30,21,13,1,1
+David Lee,185,68,31,23,32,19,10,1,1
+Maria Rodriguez,160,54,25,18,28,22,11,1,1
+James Taylor,195,75,34,26,34,17,7,1,1
+Jennifer Moore,150,47,21,17,29,23,11,1,1
+Robert Jackson,165,56,26,19,31,20,11,1,1
+Linda Martinez,180,64,29,21,33,21,10,1,1
+William Harris,175,62,28,20,32,22,9,1,1
+Patricia Clark,155,50,23,18,30,23,9,1,1
+Richard Lewis,190,73,33,25,34,18,5,1,1
+Barbara Robinson,170,59,27,20,31,21,10,1,1
+Charles Walker,165,55,25,19,32,22,10,1,1
+Jessica Hall,185,67,30,22,33,20,11,1,1
+Thomas Allen,160,53,24,18,30,23,10,1,1
+Nancy Young,175,61,28,21,32,21,10,1,1
+Daniel King,180,65,29,22,33,20,9,1,1

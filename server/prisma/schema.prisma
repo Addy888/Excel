@@ -1,0 +1,757 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  permissions Json?    // Array of permissions
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+
+  @@index([name])
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  password    String
+  roleName    String   @default("user")
+  roleId      Int?
+  role        Role?    @relation(fields: [roleId], references: [id])
+  
+  // Team Hierarchy
+  managerId   Int?     // For supervisor/team leader hierarchy
+  manager     User?    @relation("UserHierarchy", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subordinates User[]  @relation("UserHierarchy")
+  
+  // Preferences
+  preferences Json?    // Dashboard layout, theme, etc.
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  uploadedReports      UploadedReport[]
+  processedReports     ProcessedReport[]
+  auditLogs            AuditLog[]
+  reportTemplates      ReportTemplate[]
+  reportDownloads      ReportDownload[]
+  columnMappings       ColumnMapping[]
+  processingProfiles   ProcessingProfile[]
+  scheduledReports     ScheduledReport[]
+  customFormulas       CustomFormula[]
+  customKpis           CustomKpi[]
+  reportDesigns        ReportDesign[]
+  dashboardLayouts     DashboardLayout[]
+  backups              Backup[]
+  searchHistory        SearchHistory[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([managerId])
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSettings {
+  id             Int      @id @default(autoincrement())
+  companyName    String   @default("MIS Report Extractor")
+  logo           String?
+  favicon        String?
+  timezone       String   @default("UTC")
+  currency       String   @default("USD")
+  dateFormat     String   @default("YYYY-MM-DD")
+  timeFormat     String   @default("24h")
+  theme          String   @default("light")
+  primaryColor   String   @default("#3b82f6")
+  secondaryColor String   @default("#10b981")
+  reportSettings Json?    // Default report configurations
+  emailSettings  Json?    // Email server configuration
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ============================================
+// CAMPAIGN & TEAM MANAGEMENT
+// ============================================
+
+model Campaign {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agents          Agent[]
+  campaignReports CampaignReport[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  leaderId    Int?     // Team leader
+  supervisorId Int?    // Supervisor
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agents      Agent[]
+
+  @@index([name])
+}
+
+model Agent {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  phone       String?
+  campaignId  Int?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  teamId      Int?
+  team        Team?     @relation(fields: [teamId], references: [id])
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agentPerformance AgentPerformance[]
+
+  @@index([email])
+  @@index([campaignId])
+  @@index([teamId])
+}
+
+// ============================================
+// REPORT PROCESSING
+// ============================================
+
+model UploadedReport {
+  id            Int      @id @default(autoincrement())
+  fileName      String
+  originalName  String
+  filePath      String
+  fileSize      Int
+  uploadedById  Int
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+  uploadDate    DateTime @default(now())
+  recordsCount  Int      @default(0)
+  status        String   @default("uploaded") // uploaded, processing, processed, failed
+  processingProgress Float @default(0)
+  rawData       Json?
+  errorMessage  String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  processedReports   ProcessedReport[]
+  validationReports  ValidationReport[]
+  errorReports       ErrorReport[]
+  processingLogs     ProcessingLog[]
+
+  @@index([uploadedById])
+  @@index([status])
+  @@index([uploadDate])
+}
+
+model ProcessedReport {
+  id               Int      @id @default(autoincrement())
+  uploadedReportId Int
+  uploadedReport   UploadedReport @relation(fields: [uploadedReportId], references: [id])
+  processedById    Int
+  processedBy      User     @relation(fields: [processedById], references: [id])
+  processedDate    DateTime @default(now())
+  
+  // Summary fields
+  totalDialed       Int @default(0)
+  connectedCalls    Int @default(0)
+  notConnectedCalls Int @default(0)
+  qualifiedLeads    Int @default(0)
+  inProcessLeads    Int @default(0)
+  convertedLeads    Int @default(0)
+  rejectedLeads     Int @default(0)
+  duplicateNumbers  Int @default(0)
+  uniqueNumbers     Int @default(0)
+
+  agentWiseSummary  Json?
+  dateWiseSummary   Json?
+  statusWiseSummary Json?
+  
+  generatedFilePath String?
+  
+  templateId       Int?
+  template         ReportTemplate? @relation(fields: [templateId], references: [id])
+  
+  designId         Int?
+  design           ReportDesign?   @relation(fields: [designId], references: [id])
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([uploadedReportId])
+  @@index([processedById])
+  @@index([templateId])
+  @@index([processedDate])
+}
+
+// ============================================
+// REPORT DESIGNER & TEMPLATES
+// ============================================
+
+model ReportDesign {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String?
+  layout        Json?    // Column order, widths, visibility
+  sections      Json?    // Header, body, footer sections
+  styling       Json?    // Colors, fonts, borders
+  filters       Json?    // Default filters
+  sorting       Json?    // Default sorting
+  grouping      Json?    // Grouping configuration
+  isPublic      Boolean  @default(false)
+  createdById   Int
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  processedReports ProcessedReport[]
+
+  @@index([createdById])
+  @@index([isActive])
+}
+
+model ReportTemplate {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String?
+  columns       Json?    // Array of column definitions
+  formulas      Json?    // Array of formula references
+  aggregations  Json?    // Array of aggregation rules
+  validations   Json?    // Validation rules
+  createdById   Int
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  isActive      Boolean  @default(true)
+  isPublic      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  processedReports  ProcessedReport[]
+  scheduledReports  ScheduledReport[]
+
+  @@index([createdById])
+  @@index([isActive])
+}
+
+// ============================================
+// CUSTOM FORMULAS & KPIs
+// ============================================
+
+model CustomFormula {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  formula     String   @db.Text // e.g., "(qualifiedLeads / connectedCalls) * 100"
+  variables   Json?    // Array of required variables
+  returnType  String   @default("number") // number, percentage, string
+  category    String?  // conversion, performance, quality, etc.
+  isActive    Boolean  @default(true)
+  createdById Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  kpis        CustomKpi[]
+
+  @@index([createdById])
+  @@index([isActive])
+  @@index([category])
+}
+
+model CustomKpi {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  formulaId    Int?
+  formula      CustomFormula? @relation(fields: [formulaId], references: [id])
+  calculation  String   @db.Text // Alternative to formula
+  targetValue  Float?
+  comparison   String   @default(">=") // >=, <=, =, !=
+  displayFormat String  @default("number") // number, percentage, currency
+  aggregation  String   @default("sum") // sum, avg, min, max, count
+  filters      Json?
+  isActive     Boolean  @default(true)
+  createdById  Int
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([isActive])
+  @@index([formulaId])
+}
+
+// ============================================
+// DATA AGGREGATION LAYERS
+// ============================================
+
+model DailySummary {
+  id              Int      @id @default(autoincrement())
+  reportDate      DateTime @db.Date
+  campaignId      Int?
+  teamId          Int?
+  agentId         Int?
+  
+  // Metrics
+  totalDialed     Int @default(0)
+  connectedCalls  Int @default(0)
+  qualifiedLeads  Int @default(0)
+  convertedLeads  Int @default(0)
+  rejectedLeads   Int @default(0)
+  
+  // Calculated
+  connectionRate  Float @default(0)
+  conversionRate  Float @default(0)
+  qualificationRate Float @default(0)
+  
+  // Additional metrics
+  avgCallDuration Float @default(0)
+  uniqueNumbers   Int @default(0)
+  duplicateNumbers Int @default(0)
+  
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([reportDate, campaignId, teamId, agentId])
+  @@index([reportDate])
+  @@index([campaignId])
+  @@index([teamId])
+  @@index([agentId])
+}
+
+model WeeklySummary {
+  id              Int      @id @default(autoincrement())
+  weekStart       DateTime @db.Date
+  weekEnd         DateTime @db.Date
+  year            Int
+  weekNumber      Int
+  campaignId      Int?
+  teamId          Int?
+  
+  totalDialed     Int @default(0)
+  connectedCalls  Int @default(0)
+  qualifiedLeads  Int @default(0)
+  convertedLeads  Int @default(0)
+  
+  connectionRate  Float @default(0)
+  conversionRate  Float @default(0)
+  
+  avgDailyDialed  Float @default(0)
+  peakDayDialed   Int @default(0)
+  
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year, weekNumber, campaignId, teamId])
+  @@index([weekStart])
+  @@index([campaignId])
+  @@index([teamId])
+}
+
+model MonthlySummary {
+  id              Int      @id @default(autoincrement())
+  year            Int
+  month           Int
+  monthStart      DateTime @db.Date
+  monthEnd        DateTime @db.Date
+  campaignId      Int?
+  teamId          Int?
+  
+  totalDialed     Int @default(0)
+  connectedCalls  Int @default(0)
+  qualifiedLeads  Int @default(0)
+  convertedLeads  Int @default(0)
+  
+  connectionRate  Float @default(0)
+  conversionRate  Float @default(0)
+  
+  avgDailyDialed  Float @default(0)
+  peakDayDialed   Int @default(0)
+  totalWorkingDays Int @default(0)
+  
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year, month, campaignId, teamId])
+  @@index([year, month])
+  @@index([campaignId])
+  @@index([teamId])
+}
+
+// ============================================
+// DASHBOARD CUSTOMIZATION
+// ============================================
+
+model DashboardLayout {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  layout      Json     // Widget positions, sizes, types
+  widgets     Json     // Widget configurations
+  filters     Json?    // Default filters
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isDefault])
+}
+
+// ============================================
+// VALIDATION & ERROR HANDLING
+// ============================================
+
+model ValidationReport {
+  id               Int      @id @default(autoincrement())
+  uploadedReportId Int
+  uploadedReport   UploadedReport @relation(fields: [uploadedReportId], references: [id])
+  totalRecords     Int      @default(0)
+  validRecords     Int      @default(0)
+  invalidRecords   Int      @default(0)
+  errors           Json?
+  warnings         Json?
+  suggestions      Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([uploadedReportId])
+}
+
+model ErrorReport {
+  id               Int      @id @default(autoincrement())
+  uploadedReportId Int
+  uploadedReport   UploadedReport @relation(fields: [uploadedReportId], references: [id])
+  invalidRecords   Json?
+  missingFields    Json?
+  duplicateEntries Json?
+  totalErrors      Int      @default(0)
+  canRetry         Boolean  @default(true)
+  retryCount       Int      @default(0)
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([uploadedReportId])
+  @@index([canRetry])
+}
+
+model ProcessingLog {
+  id               Int      @id @default(autoincrement())
+  uploadedReportId Int
+  uploadedReport   UploadedReport @relation(fields: [uploadedReportId], references: [id])
+  stage            String   // upload, validation, processing, generation
+  status           String   // started, progress, completed, failed
+  message          String   @db.Text
+  progress         Float    @default(0)
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  @@index([uploadedReportId])
+  @@index([stage])
+  @@index([status])
+}
+
+// ============================================
+// COLUMN MAPPING & PROCESSING
+// ============================================
+
+model ColumnMapping {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  mappings       Json?
+  isDefault      Boolean  @default(false)
+  createdById    Int?
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  processingProfiles ProcessingProfile[]
+
+  @@index([createdById])
+  @@index([isDefault])
+}
+
+model ProcessingProfile {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  columnMappingId Int?
+  columnMapping   ColumnMapping? @relation(fields: [columnMappingId], references: [id])
+  rules           Json?
+  filters         Json?
+  createdById     Int
+  createdBy       User     @relation(fields: [createdById], references: [id])
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([isDefault])
+}
+
+model ProcessingRule {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  condition   Json?
+  action      Json?
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([order])
+}
+
+// ============================================
+// SCHEDULING & AUTOMATION
+// ============================================
+
+model ScheduledReport {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  schedule    String
+  frequency   String   @default("daily")
+  templateId  Int?
+  template    ReportTemplate? @relation(fields: [templateId], references: [id])
+  recipients  Json?
+  subject     String?
+  emailBody   String?  @db.Text
+  isActive    Boolean  @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdById Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reportRuns  ScheduledReportRun[]
+
+  @@index([createdById])
+  @@index([isActive])
+  @@index([nextRunAt])
+}
+
+model ScheduledReportRun {
+  id                Int      @id @default(autoincrement())
+  scheduledReportId Int
+  scheduledReport   ScheduledReport @relation(fields: [scheduledReportId], references: [id])
+  status            String   @default("pending")
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  errorMessage      String?  @db.Text
+  reportFilePath    String?
+  createdAt         DateTime @default(now())
+
+  @@index([scheduledReportId])
+  @@index([status])
+}
+
+// ============================================
+// PERFORMANCE TRACKING
+// ============================================
+
+model CampaignReport {
+  id              Int      @id @default(autoincrement())
+  campaignId      Int
+  campaign        Campaign @relation(fields: [campaignId], references: [id])
+  reportDate      DateTime
+  totalDialed     Int      @default(0)
+  connected       Int      @default(0)
+  qualified       Int      @default(0)
+  converted       Int      @default(0)
+  conversionRate  Float    @default(0)
+  agentCount      Int      @default(0)
+  metrics         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([campaignId, reportDate])
+  @@index([campaignId])
+  @@index([reportDate])
+}
+
+model AgentPerformance {
+  id              Int      @id @default(autoincrement())
+  agentId         Int
+  agent           Agent    @relation(fields: [agentId], references: [id])
+  reportDate      DateTime
+  totalCalls      Int      @default(0)
+  connectedCalls  Int      @default(0)
+  qualifiedLeads  Int      @default(0)
+  convertedLeads  Int      @default(0)
+  conversionRate  Float    @default(0)
+  productivityScore Float  @default(0)
+  rank            Int?
+  metrics         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([agentId, reportDate])
+  @@index([agentId])
+  @@index([reportDate])
+  @@index([rank])
+}
+
+model ReportComparison {
+  id              Int      @id @default(autoincrement())
+  name            String
+  report1Id       Int
+  report2Id       Int
+  comparisonData  Json?
+  createdById     Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdById])
+}
+
+// ============================================
+// AUDIT & MONITORING
+// ============================================
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  resource    String
+  resourceId  Int?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  statusCode  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+model SystemHealth {
+  id              Int      @id @default(autoincrement())
+  cpuUsage        Float    @default(0)
+  memoryUsage     Float    @default(0)
+  diskUsage       Float    @default(0)
+  activeConnections Int    @default(0)
+  queueSize       Int      @default(0)
+  errorCount      Int      @default(0)
+  status          String   @default("healthy") // healthy, warning, critical
+  metadata        Json?
+  checkedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([checkedAt])
+}
+
+// ============================================
+// BACKUP & RECOVERY
+// ============================================
+
+model Backup {
+  id            Int      @id @default(autoincrement())
+  name          String
+  type          String   // manual, scheduled, auto
+  status        String   @default("pending") // pending, inProgress, completed, failed
+  filePath      String?
+  fileSize      Int?
+  compression   Boolean  @default(true)
+  includeFiles  Boolean  @default(true)
+  createdById   Int?
+  createdBy     User?    @relation(fields: [createdById], references: [id])
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  errorMessage  String?  @db.Text
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([createdById])
+  @@index([status])
+  @@index([type])
+  @@index([startedAt])
+}
+
+// ============================================
+// ADVANCED SEARCH
+// ============================================
+
+model SearchHistory {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  query       String   @db.Text
+  filters     Json?
+  entityType  String   // reports, users, campaigns, agents, templates
+  resultCount Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+// ============================================
+// DOWNLOADS & EXPORTS
+// ============================================
+
+model ReportDownload {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  reportId    Int
+  reportType  String
+  format      String   @default("xlsx") // xlsx, csv, pdf
+  downloadDate DateTime @default(now())
+  ipAddress   String?
+  fileSize    Int?
+
+  @@index([userId])
+  @@index([reportType])
+  @@index([downloadDate])
+}
