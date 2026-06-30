@@ -6,6 +6,7 @@ import {
   downloadReport,
   deleteReport,
   getDashboardStats,
+  generateReportAutomatic,
 } from '../controllers/reportController';
 import { authenticateToken, authorizeRole } from '../middleware/auth';
 import { upload } from '../middleware/upload';
@@ -14,6 +15,9 @@ const router = Router();
 
 // Upload endpoint: POST /api/reports/upload
 router.post('/upload', authenticateToken, upload.single('file'), uploadReport);
+
+// FULLY AUTOMATIC Report Generation: POST /api/reports/generate-automatic
+router.post('/generate-automatic', authenticateToken, generateReportAutomatic);
 
 // List reports: GET /api/reports
 router.get('/', authenticateToken, getReports);
